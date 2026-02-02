@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accounting Journal Entry Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .terminal {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 500px;
+            overflow-y: auto;
+        }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .header { color: #60a5fa; font-weight: bold; }
+        .entry-line { border-bottom: 1px solid #333; padding: 4px 0; white-space: pre-wrap; font-size: 13px; }
+        
+        input, select {
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            padding: 0.5rem;
+            width: 100%;
+            font-size: 0.875rem;
+        }
+        
+        label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #4b5563;
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+        }
+
+        .tx-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <div class="mb-6 flex justify-between items-end">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Accounting Journal Generator</h1>
+                <p class="text-sm text-gray-500">OOP Class-Based Implementation</p>
+            </div>
+            <div class="text-right">
+                <span class="text-xs font-mono text-gray-400">Method:</span>
+                <select id="method" class="w-32 py-1 text-xs">
+                    <option value="accrual">Accrual Basis</option>
+                    <option value="cash">Cash Basis</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Left Sidebar: Form Builder -->
+            <div class="lg:col-span-5 space-y-4">
+                <div class="bg-white rounded-lg shadow-md p-6 h-full flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-bold text-gray-700">Transaction Builder</h2>
+                        <button onclick="app.addForm()" class="text-blue-600 hover:text-blue-800 text-sm font-bold flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg> Add Row
+                        </button>
+                    </div>
+                    
+                    <div id="form-container" class="flex-grow overflow-y-auto max-h-[600px] pr-2">
+                        <!-- Transaction forms will be injected here -->
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-gray-100">
+                        <button onclick="app.processBatch()" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded shadow-lg hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                            </svg>
+                            Generate Journal Entries
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Content: Terminal -->
+            <div class="lg:col-span-7 flex flex-col space-y-4">
+                <div id="output" class="terminal flex-grow shadow-2xl border border-gray-800">
+                    <span class="text-gray-500">Initialize transactions on the left and click "Generate"...</span>
+                </div>
+                
+                <!-- JSON Preview (Read Only) -->
+                <div class="bg-slate-800 rounded-lg p-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Internal Data Structure</span>
+                        <button onclick="app.copyJSON()" class="text-slate-500 hover:text-white text-xs">Copy JSON</button>
+                    </div>
+                    <pre id="json-preview" class="text-[10px] text-emerald-500 overflow-x-auto h-24 font-mono">[]</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AccountingApp {
+            constructor() {
+                this.transactionCount = 0;
+                this.triggerCount = 0;
+                
+                // Define Chart of Accounts
+                this.accounts = {
+                    "inventory": "Asset/Inventory",
+                    "expense": "Expense/General Expense",
+                    "purchase_return": "Expense/Purchase Returns",
+                    "accounts_payable": "Liability/Accounts Payable",
+                    "accounts_receivable": "Asset/Accounts Receivable",
+                    "bank": "Asset/Cash/Bank",
+                    "revenue": "Income/Sales Revenue",
+                    "sales_return": "Income/Sales Returns",
+                    "input_cgst": "Asset/Input CGST",
+                    "input_sgst": "Asset/Input SGST",
+                    "input_igst": "Asset/Input IGST",
+                    "output_cgst": "Liability/Output CGST",
+                    "output_sgst": "Liability/Output SGST",
+                    "output_igst": "Liability/Output IGST",
+                    "tds_receivable": "Asset/TDS Receivable",
+                    "tds_payable": "Liability/TDS Payable"
+                };
+
+                // Bind methods if necessary (though arrow functions or direct calls work fine here)
+                this.init();
+            }
+
+            init() {
+                // Load initial state
+                this.addForm("Global Supplies Ltd", "purchase", 10000);
+                this.addForm("Customer Alpha", "sale", 5000);
+            }
+
+            /** * Business Logic: Calculate Tax Split
+             */
+            calculateTaxSplit(amount, taxType, gstRate) {
+                let gstAmount = amount * gstRate / 100;
+                if (taxType === "intra") {
+                    let half = gstAmount / 2;
+                    return { cgst: half, sgst: half, igst: 0, total: gstAmount };
+                } else {
+                    return { cgst: 0, sgst: 0, igst: gstAmount, total: gstAmount };
+                }
+            }
+
+            /**
+             * Business Logic: Generate Single Journal Entry
+             */
+            createJournalEntry(tx, method = "accrual") {
+                const journal = [];
+                const date = tx.date || new Date().toISOString().split('T')[0];
+                const amount = parseFloat(tx.amount) || 0;
+                const gstRate = parseFloat(tx.gst_rate) || 0;
+                const taxType = tx.tax_type || "intra";
+                const tds = parseFloat(tx.tds) || 0;
+                
+                const tax = this.calculateTaxSplit(amount, taxType, gstRate);
+                let totalWithTax = amount + tax.total;
+
+                // --- PURCHASE LOGIC ---
+                if (tx.type === "purchase") {
+                    let debitAcc = this.accounts.expense;
+                    let creditAcc = (method === "accrual") ? this.accounts.accounts_payable : this.accounts.bank;
+
+                    // DR: Expense
+                    journal.push({ account: debitAcc, debit: amount, credit: 0 });
+                    
+                    // DR: Input Taxes
+                    if (tax.cgst > 0) journal.push({ account: this.accounts.input_cgst, debit: tax.cgst, credit: 0 });
+                    if (tax.sgst > 0) journal.push({ account: this.accounts.input_sgst, debit: tax.sgst, credit: 0 });
+                    if (tax.igst > 0) journal.push({ account: this.accounts.input_igst, debit: tax.igst, credit: 0 });
+
+                    // Handling TDS (Liability)
+                    let payableAmount = totalWithTax;
+                    if (tds > 0) {
+                        journal.push({ account: this.accounts.tds_payable, debit: 0, credit: tds });
+                        payableAmount -= tds;
+                    }
+
+                    // CR: Payable/Bank
+                    journal.push({ account: creditAcc, debit: 0, credit: payableAmount });
+
+                // --- SALE LOGIC ---
+                } else if (tx.type === "sale") {
+                    let debitAcc = (method === "accrual") ? this.accounts.accounts_receivable : this.accounts.bank;
+                    let creditAcc = this.accounts.revenue;
+
+                    let receivableAmount = totalWithTax;
+                    
+                    // Handling TDS (Asset) - Customer deducted TDS
+                    if (tds > 0) {
+                        journal.push({ account: this.accounts.tds_receivable, debit: tds, credit: 0 });
+                        receivableAmount -= tds;
+                    }
+
+                    // DR: Receivable/Bank
+                    journal.push({ account: debitAcc, debit: receivableAmount, credit: 0 });
+                    
+                    // CR: Revenue
+                    journal.push({ account: creditAcc, debit: 0, credit: amount });
+
+                    // CR: Output Taxes
+                    if (tax.cgst > 0) journal.push({ account: this.accounts.output_cgst, debit: 0, credit: tax.cgst });
+                    if (tax.sgst > 0) journal.push({ account: this.accounts.output_sgst, debit: 0, credit: tax.sgst });
+                    if (tax.igst > 0) journal.push({ account: this.accounts.output_igst, debit: 0, credit: tax.igst });
+
+                // --- DEBIT NOTE (Purchase Return) LOGIC ---
+                } else if (tx.type === "debitnote") {
+                    let debitAcc = (method === "accrual") ? this.accounts.accounts_payable : this.accounts.bank;
+                    let creditAcc = this.accounts.purchase_return; // Or Expense reversal
+
+                    let returnTotal = totalWithTax;
+
+                    // DR: Payable (Reduce Liability) or Bank (Get Refund)
+                    journal.push({ account: debitAcc, debit: returnTotal, credit: 0 });
+
+                    // CR: Expense/Return (Reduce Expense)
+                    journal.push({ account: creditAcc, debit: 0, credit: amount });
+
+                    // CR: Reversal of Input Tax
+                    if (tax.cgst > 0) journal.push({ account: this.accounts.input_cgst, debit: 0, credit: tax.cgst });
+                    if (tax.sgst > 0) journal.push({ account: this.accounts.input_sgst, debit: 0, credit: tax.sgst });
+                    if (tax.igst > 0) journal.push({ account: this.accounts.input_igst, debit: 0, credit: tax.igst });
+                }
+                else if(tx.type ==="creditnote"){
+                    alert();
+
+
+
+                }
+
+
+
+                return { 
+                    date, 
+                    party: tx.party || "Unknown", 
+                    type: tx.type, 
+                    journal 
+                };
+            }
+
+            // --- UI Interaction Methods ---
+
+            addForm(party = "", type = "purchase", amount = "") {
+                this.transactionCount++;
+                const id = `tx-${this.transactionCount}`;
+                const container = document.getElementById('form-container');
+                
+                const card = document.createElement('div');
+                card.className = 'tx-card group';
+                card.id = id;
+                
+                card.innerHTML = `
+                    <button onclick="app.removeForm('${id}')" class="absolute top-2 right-2 text-gray-300 hover:text-red-500 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div class="col-span-2">
+                            <label>Party Name</label>
+                            <input type="text" placeholder="e.g. Vendor Name" class="field-party" value="${party}" oninput="app.updatePreview()">
+                        </div>
+                        <div>
+                            <label>Type</label>
+                            <select class="field-type" onchange="app.updatePreview()">
+                                <option value="purchase" ${type==='purchase'?'selected':''}>Purchase</option>
+                                <option value="sale" ${type==='sale'?'selected':''}>Sale</option>
+                                <option value="debitnote" ${type==='debitnote'?'selected':''}>Debit Note (Return)</option>
+                                 <option value="creditnote" ${type==='creditnote'?'selected':''}>Credit Note (Return)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Base Amount</label>
+                            <input type="number" placeholder="0.00" class="field-amount" value="${amount}" oninput="app.updatePreview()">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label>GST %</label>
+                            <select class="field-gst" onchange="app.updatePreview()">
+                                <option value="0">Exempt (0%)</option>
+                                <option value="5">Lower (5%)</option>
+                                <option value="12">Standard (12%)</option>
+                                <option value="18" selected>Standard (18%)</option>
+                                <option value="28">Luxury (28%)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Tax Region</label>
+                            <select class="field-tax-type" onchange="app.updatePreview()">
+                                <option value="intra">Intra-State</option>
+                                <option value="inter">Inter-State</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>TDS Deduction</label>
+                            <input type="number" placeholder="Amt" class="field-tds" value="0" oninput="app.updatePreview()">
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+                this.updatePreview();
+            }
+
+            removeForm(id) {
+                const el = document.getElementById(id);
+                if (el) el.remove();
+                this.updatePreview();
+            }
+
+            collectData() {
+                const cards = document.querySelectorAll('.tx-card');
+                const transactions = [];
+                cards.forEach(card => {
+                    transactions.push({
+                        party: card.querySelector('.field-party').value,
+                        type: card.querySelector('.field-type').value,
+                        amount: parseFloat(card.querySelector('.field-amount').value) || 0,
+                        gst_rate: parseInt(card.querySelector('.field-gst').value),
+                        tax_type: card.querySelector('.field-tax-type').value,
+                        tds: parseFloat(card.querySelector('.field-tds').value) || 0
+                    });
+                });
+                return transactions;
+            }
+
+            updatePreview() {
+                const txs = this.collectData();
+                document.getElementById('json-preview').textContent = JSON.stringify(txs, null, 2);
+            }
+
+            log(msg, className = "") {
+                const out = document.getElementById('output');
+                const div = document.createElement('div');
+                div.className = className;
+                div.innerHTML = msg;
+                out.appendChild(div);
+                out.scrollTop = out.scrollHeight;
+            }
+
+            copyJSON() {
+                const json = document.getElementById('json-preview').textContent;
+                navigator.clipboard.writeText(json).then(() => {
+                    alert("JSON structure copied to clipboard");
+                });
+            }
+
+            // --- Main Execution Flow ---
+
+            async processBatch() {
+                this.triggerCount +=1;
+                const out = document.getElementById('output');
+                const method = document.getElementById('method').value;
+                const transactions = this.collectData();
+                
+                // Reset Output
+                out.innerHTML = '';
+                this.updatePreview();
+
+                if(this.triggerCount>5){
+                    this.log("Error: Trial maximum Limit Over");
+                    return;
+                }
+
+
+
+
+                if (transactions.length === 0) {
+                    this.log("Error: No transactions to process.", "error");
+                    return;
+                }
+
+                this.log("> Initializing Accounting Ledger Class...", "header");
+                await new Promise(r => setTimeout(r, 400));
+                this.log(`[SYSTEM] Loaded Chart of Accounts. Method: ${method.toUpperCase()}`);
+                this.log(`[SYSTEM] Processing ${transactions.length} batch items...\n`);
+
+                transactions.forEach((tx, index) => {
+                    // Call the logic method
+                    const entry = this.createJournalEntry(tx, method);
+                    
+                    this.log(`<div class="mt-4 font-bold text-white border-b border-gray-600 pb-1">TRX #${index + 1} | ${tx.party} (${tx.type.toUpperCase()})</div>`);
+                    
+                    entry.journal.forEach(line => {
+                        const d = line.debit > 0 ? line.debit.toFixed(2).padStart(12) : "".padStart(12);
+                        const c = line.credit > 0 ? line.credit.toFixed(2).padStart(12) : "".padStart(12);
+                        
+                        this.log(`<div class="entry-line">` +
+                            `<span class="text-blue-300 w-48 inline-block truncate" title="${line.account}">${line.account}</span>` +
+                            `<span class="text-green-400 font-mono">${d}</span>` +
+                            `<span class="text-red-400 font-mono">${c}</span>` +
+                            `</div>`);
+                    });
+                });
+
+                this.log("\n====================================", "header");
+                this.log("Journal posting complete.", "success");
+            }
+        }
+
+        // Initialize the App Instance globally
+        let app;
+        window.addEventListener('DOMContentLoaded', () => {
+            app = new AccountingApp();
+        });
+    </script>
+</body>
+</html>
